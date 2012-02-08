@@ -89,7 +89,7 @@ offset = 0
 requestsPerToken = 200
 
 	
-@app.route('/callback/', methods=['GET', 'POST'])
+@app.route('/callback', methods=['GET', 'POST'])
 def callback():
 	global offset
 	global username
