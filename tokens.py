@@ -62,6 +62,7 @@ def fbapi_get_string(path, domain=u'graph', params=None, access_token=None,
 	url = u'https://' + domain + u'.facebook.com' + path
 	params_encoded = encode_func(params)
 	url = url + params_encoded
+	print url
 	result = urllib2.urlopen(url).read()
 
 	return result
@@ -69,7 +70,7 @@ def fbapi_get_string(path, domain=u'graph', params=None, access_token=None,
 
 def fbapi_auth(code):
 	params = {'client_id': APP_ID,
-			  'redirect_uri': "http://jp-checkin-tokens.herokuapp.com/callback/",
+			  'redirect_uri': get_facebook_callback_url(),
 			  'client_secret': APP_SECRET,
 			  'code': code}
 
@@ -81,6 +82,9 @@ def fbapi_auth(code):
 		(key, value) = pair.split("=")
 		result_dict[key] = value
 	return (result_dict["access_token"], result_dict["expires"])
+	
+def get_facebook_callback_url():
+	return 'http://jp-checkin-tokens.herokuapp.com/callback/'
 	
 username = ''
 friendCount = 1
@@ -99,21 +103,22 @@ def callback():
 		if request.method == 'POST':
 			username = request.args.get('user')
 			friendCount = int(request.args.get('friends'))
-			token = fbapi_auth(request.args.get('code'))[0]
+			token = request.args.get('code')
 			for i in xrange(0, requestsPerToken, limit):
 				redisQueue.enqueue(AggregateCheckins, username, token, limit, i)
 				offset += requestsPerToken
-			return redirect(oauth_login_url(next_url="http://jp-checkin-tokens.herokuapp.com/callback/"))
-		
+			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
+			print oauth_login_url(next_url=get_facebook_callback_url())
 		if request.method == 'GET':
 			token = fbapi_auth(request.args.get('code'))[0]
 			for i in xrange(0, requestsPerToken, limit):
 				redisQueue.enqueue(AggregateCheckins, username, token, limit, i)
 				offset += requestsPerToken
-			return redirect(oauth_login_url(next_url="http://jp-checkin-tokens.herokuapp.com/callback/"))
+			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
+			print oauth_login_url(next_url=get_facebook_callback_url())
 		
 if __name__ == '__main__':
-	port = int(os.environ.get("PORT", 5000))
+	port = int(os.environ.get("PORT", 6000))
 	if APP_ID and APP_SECRET:
 		app.run(host='0.0.0.0', port=port)
 	else:
