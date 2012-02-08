@@ -1,1 +1,1 @@
-worker: python tokens.py
+web: python tokens.py
