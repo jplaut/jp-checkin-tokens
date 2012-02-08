@@ -83,7 +83,7 @@ def fbapi_auth(code):
 	return (result_dict["access_token"], result_dict["expires"])
 	
 username = ''
-friendCount = 0
+friendCount = 1
 limit = 20
 offset = 0
 requestsPerToken = 200
