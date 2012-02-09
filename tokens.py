@@ -106,7 +106,8 @@ def callback():
 			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
 
 		if request.method == 'GET':
-			token = fbapi_auth(request.args.get('code'))[0]
+			appToken = request.args.get('code')
+			token = fbapi_auth(appToken)[0]
 			for i in xrange(0, requestsPerToken, interval):
 				redisQueue.enqueue(AggregateCheckins, username, token, interval, i)
 				offset += requestsPerToken
