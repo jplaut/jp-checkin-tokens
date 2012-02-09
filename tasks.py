@@ -6,7 +6,6 @@ from collections import defaultdict
 import redis
 import pyres
 import simplejson as json
-from flask import Flask, request
 
 DBPATH=environ.get('MONGODBPATH')
 DBNAME=environ.get('MONGODBDATABASE')
@@ -34,34 +33,7 @@ def fql(fql, token, args=None):
 def fb_call(call, args=None):
 	return json.loads(urllib2.urlopen("https://graph.facebook.com/" + call +
 									  '?' + urllib.urlencode(args)).read())	
-										
-class GetCheckinMetadata:
-	
-	queue = "get_checkin_metadata"
-		
-	@staticmethod
-	def perform(checkin_id, user, token):
-		checkin_metadata = {}
-		collection = db[user]
-		
-		checkin_metadata_all = fb_call(checkin_id, args={'access_token': token})
-		
-		if 'from' in checkin_metadata_all:
-			if 'name' in checkin_metadata_all['from']:
-				checkin_metadata['author_name'] = checkin_metadata_all['from']['name']
-			if 'id' in checkin_metadata_all['from']:
-				checkin_metadata['author_uid'] = checkin_metadata_all['from']['id']
-		if 'message' in checkin_metadata_all:
-			checkin_metadata['comment'] = checkin_metadata_all['message']
-		if 'place' in checkin_metadata_all:
-			if 'id' in checkin_metadata_all['place']:
-				checkin_metadata['place_id'] = checkin_metadata_all['place']['id']
-			if 'name' in checkin_metadata_all['place']:
-				checkin_metadata['place_name'] = checkin_metadata_all['place']['name']
-			if 'location' in checkin_metadata_all['place']:
-				checkin_metadata['place_city'] = checkin_metadata_all['place']['location']
-		
-		collection.insert(checkin_metadata)
+						
 					
 class AggregateCheckins:
 	
@@ -69,12 +41,28 @@ class AggregateCheckins:
 		
 	@staticmethod	
 	def perform(user, token, limit, offset):
+		checkin_metadata = {}
+		collection = db[user]
 		
-		query1 = "\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s OFFSET %s\"" % (limit, offset)
-		query2 = "\"query2\":\"SELECT checkin_id FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\""
+		friends = fql("SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s OFFSET %s" % (limit, offset), token)
 		
-		checkins = fql("{%s, %s}" % (query1, query2), token)['data'][1]['fql_result_set']
-		
-		for checkin in checkins:
-			redisQueue.enqueue(GetCheckinMetadata, str(checkin['checkin_id']), user, token)
+		for friend in friends['data']:
+			checkins = fb_call(friend['uid2'] + '/checkins', args={'limit':2000, 'access_token':token})
+			for checkin in checkins['data']:
+				if 'from' in checkin:
+					if 'name' in checkin['from']:
+						checkin_metadata['author_name'] = checkin['from']['name']
+					if 'id' in checkin['from']:
+						checkin_metadata['author_uid'] = checkin['from']['id']
+				if 'message' in checkin:
+					checkin_metadata['comment'] = checkin['message']
+				if 'place' in checkin:
+					if 'id' in checkin['place']:
+						checkin_metadata['place_id'] = checkin['place']['id']
+					if 'name' in checkin['place']:
+						checkin_metadata['place_name'] = checkin['place']['name']
+					if 'location' in checkin['place']:
+						checkin_metadata['place_city'] = checkin['place']['location']
+				
+				collection.insert(checkin_metadata)
 	

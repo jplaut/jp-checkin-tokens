@@ -4,7 +4,8 @@ import simplejson as json
 import urllib
 import urllib2
 
-from flask import Flask, request, redirect, url_for
+from flask import Flask, request, redirect
+from mako.template import Template
 import redis
 import pyres
 from tasks import *
@@ -84,37 +85,36 @@ def fbapi_auth(code):
 	return (result_dict["access_token"], result_dict["expires"])
 	
 def get_facebook_callback_url():
-	return 'http://jp-checkin-tokens.herokuapp.com/callback/'
-	
-username = ''
-friendCount = 1
-offset = 0
-requestsPerToken = 300
+	return 'http://localhost:8000/callback'
 
-	
+def get_username(token):
+	return fb_call('me', args={'access_token':token})['username']
+
+def get_friend_count(token):
+	return int(fql("SELECT friend_count FROM user WHERE uid=me()", token)['data'][0]['friend_count'])
+
+
 @app.route('/callback/', methods=['GET', 'POST'])
 def callback():
-	global offset
-	global username
-	global friendCount
-	interval = 20
-	
-	while offset <= friendCount:
-		if request.method == 'POST':
-			username = request.args.get('user')
-			friendCount = int(request.args.get('friends'))
+	if request.method == "GET":
+		if request.args.get('code', None):
+			access_token = fbapi_auth(request.args.get('code'))[0]
+			username = get_username(access_token)
+			friendCount = get_friend_count(access_token)
+			offset = friendCount-(friendCount/2+1)
+			interval = 20
+			
+			for i in xrange(offset, friendCount, interval):
+				redisQueue.enqueue(AggregateCheckins, username, access_token, interval, i)
+			
+			return Template(filename='templates/index.html').render()
+		
+		else:
 			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
-
-		if request.method == 'GET':
-			appToken = request.args.get('code')
-			token = fbapi_auth(appToken)[0]
-			for i in xrange(0, requestsPerToken, interval):
-				redisQueue.enqueue(AggregateCheckins, username, token, interval, i)
-				offset += requestsPerToken
-			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
+			
 		
 if __name__ == '__main__':
-	port = int(os.environ.get("PORT", 6000))
+	port = int(os.environ.get("PORT", 8000))
 	if APP_ID and APP_SECRET:
 		app.run(host='0.0.0.0', port=port)
 	else:
