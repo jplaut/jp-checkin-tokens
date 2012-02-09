@@ -88,34 +88,29 @@ def get_facebook_callback_url():
 	
 username = ''
 friendCount = 1
-limit = 20
 offset = 0
-requestsPerToken = 200
+requestsPerToken = 300
 
 	
-@app.route('/callback', methods=['GET', 'POST'])
+@app.route('/callback/', methods=['GET', 'POST'])
 def callback():
 	global offset
 	global username
 	global friendCount
+	interval = 20
 	
 	while offset <= friendCount:
 		if request.method == 'POST':
 			username = request.args.get('user')
 			friendCount = int(request.args.get('friends'))
-			token = request.args.get('code')
-			for i in xrange(0, requestsPerToken, limit):
-				redisQueue.enqueue(AggregateCheckins, username, token, limit, i)
-				offset += requestsPerToken
 			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
-			print oauth_login_url(next_url=get_facebook_callback_url())
+
 		if request.method == 'GET':
 			token = fbapi_auth(request.args.get('code'))[0]
-			for i in xrange(0, requestsPerToken, limit):
-				redisQueue.enqueue(AggregateCheckins, username, token, limit, i)
+			for i in xrange(0, requestsPerToken, interval):
+				redisQueue.enqueue(AggregateCheckins, username, token, interval, i)
 				offset += requestsPerToken
 			return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
-			print oauth_login_url(next_url=get_facebook_callback_url())
 		
 if __name__ == '__main__':
 	port = int(os.environ.get("PORT", 6000))
